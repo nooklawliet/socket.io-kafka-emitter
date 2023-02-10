@@ -6,7 +6,8 @@ const Debug = require("debug");
 const socket_io_parser_1 = require("socket.io-parser");
 const debug = new Debug('socket.io-kafka-emitter');
 const UID = "emitter";
-const DEFAULT_KAFKA_TOPIC = 'kafka_adapter';
+const KAFKA_ADAPTER_TOPIC = 'kafka_adapter';
+const KAFKA_ADAPTER_SOCKET_TOPIC = 'kafka_adapter_socket';
 var RequestType;
 (function (RequestType) {
     RequestType[RequestType["SOCKETS"] = 0] = "SOCKETS";
@@ -32,15 +33,15 @@ class KafkaEmitter {
             parser: this.opts.parser,
         };
     }
-    // /**
-    //  * Return a new emitter for the given namespace.
-    //  *
-    //  * @param nsp - namespace
-    //  * @public
-    //  */
-    // of(nsp) {
-    //     return new Emitter(this.producer, this.opts, (nsp[0] !== "/" ? "/" : "") + nsp);
-    // }
+    /**
+     * Return a new emitter for the given namespace.
+     *
+     * @param nsp - namespace
+     * @public
+     */
+    of(nsp) {
+        return new KafkaEmitter(this.producer, this.opts, (nsp[0] !== "/" ? "/" : "") + nsp);
+    }
     /**
      * Emits to all clients.
      *
@@ -59,6 +60,101 @@ class KafkaEmitter {
      */
     to(room) {
         return new BroadcastOperator(this.producer, this.broadcastOptions).to(room);
+    }
+    /**
+     * Targets a room when emitting.
+     *
+     * @param room
+     * @return BroadcastOperator
+     * @public
+     */
+    in(room) {
+        return new BroadcastOperator(this.producer, this.broadcastOptions).in(room);
+    }
+    /**
+     * Excludes a room when emitting.
+     *
+     * @param room
+     * @return BroadcastOperator
+     * @public
+     */
+    except(room) {
+        return new BroadcastOperator(this.producer, this.broadcastOptions).except(room);
+    }
+    /**
+     * Sets a modifier for a subsequent event emission that the event data may be lost if the client is not ready to
+     * receive messages (because of network slowness or other issues, or because they’re connected through long polling
+     * and is in the middle of a request-response cycle).
+     *
+     * @return BroadcastOperator
+     * @public
+     */
+    get volatile() {
+        return new BroadcastOperator(this.producer, this.broadcastOptions)
+            .volatile;
+    }
+    /**
+     * Sets the compress flag.
+     *
+     * @param compress - if `true`, compresses the sending data
+     * @return BroadcastOperator
+     * @public
+     */
+    compress(compress) {
+        return new BroadcastOperator(this.producer, this.broadcastOptions).compress(compress);
+    }
+    /**
+     * Makes the matching socket instances join the specified rooms
+     *
+     * @param rooms
+     * @public
+     */
+    socketsJoin(rooms) {
+        return new BroadcastOperator(this.producer, this.broadcastOptions).socketsJoin(rooms);
+    }
+    /**
+     * Makes the matching socket instances leave the specified rooms
+     *
+     * @param rooms
+     * @public
+     */
+    socketsLeave(rooms) {
+        return new BroadcastOperator(this.producer, this.broadcastOptions).socketsLeave(rooms);
+    }
+    /**
+     * Makes the matching socket instances disconnect
+     *
+     * @param close - whether to close the underlying connection
+     * @public
+     */
+    disconnectSockets(close = false) {
+        return new BroadcastOperator(this.producer, this.broadcastOptions).disconnectSockets(close);
+    }
+    /**
+     * Send a packet to the Socket.IO servers in the cluster
+     *
+     * @param args - any number of serializable arguments
+     */
+    serverSideEmit(...args) {
+        const withAck = typeof args[args.length - 1] === "function";
+        if (withAck) {
+            throw new Error("Acknowledgements are not supported");
+        }
+        const request = JSON.stringify({
+            uid: UID,
+            type: RequestType.SERVER_SIDE_EMIT,
+            data: args,
+        });
+        const msg = this.broadcastOptions.parser.encode([UID, request]);
+        const produceMessage = {
+            topic: KAFKA_ADAPTER_SOCKET_TOPIC,
+            messages: [{
+                    key: UID,
+                    value: msg
+                }]
+        };
+        debug('producer send message:', produceMessage);
+        this.producer.send(produceMessage);
     }
 }
 exports.KafkaEmitter = KafkaEmitter;
@@ -88,56 +184,56 @@ class BroadcastOperator {
         }
         return new BroadcastOperator(this.producer, this.broadcastOptions, rooms, this.exceptRooms, this.flags);
     }
-    // /**
-    //  * Targets a room when emitting.
-    //  *
-    //  * @param room
-    //  * @return a new BroadcastOperator instance
-    //  * @public
-    //  */
-    // in(room) {
-    //     return this.to(room);
-    // }
-    // /**
-    //  * Excludes a room when emitting.
-    //  *
-    //  * @param room
-    //  * @return a new BroadcastOperator instance
-    //  * @public
-    //  */
-    // except(room) {
-    //     const exceptRooms = new Set(this.exceptRooms);
-    //     if (Array.isArray(room)) {
-    //         room.forEach((r) => exceptRooms.add(r));
-    //     }
-    //     else {
-    //         exceptRooms.add(room);
-    //     }
-    //     return new BroadcastOperator(this.producer, this.broadcastOptions, this.rooms, exceptRooms, this.flags);
-    // }
-    // /**
-    //  * Sets the compress flag.
-    //  *
-    //  * @param compress - if `true`, compresses the sending data
-    //  * @return a new BroadcastOperator instance
-    //  * @public
-    //  */
-    // compress(compress) {
-    //     const flags = Object.assign({}, this.flags, { compress });
-    //     return new BroadcastOperator(this.producer, this.broadcastOptions, this.rooms, this.exceptRooms, flags);
-    // }
-    // /**
-    //  * Sets a modifier for a subsequent event emission that the event data may be lost if the client is not ready to
-    //  * receive messages (because of network slowness or other issues, or because they’re connected through long polling
-    //  * and is in the middle of a request-response cycle).
-    //  *
-    //  * @return a new BroadcastOperator instance
-    //  * @public
-    //  */
-    // get volatile() {
-    //     const flags = Object.assign({}, this.flags, { volatile: true });
-    //     return new BroadcastOperator(this.producer, this.broadcastOptions, this.rooms, this.exceptRooms, flags);
-    // }
+    /**
+     * Targets a room when emitting.
+     *
+     * @param room
+     * @return a new BroadcastOperator instance
+     * @public
+     */
+    in(room) {
+        return this.to(room);
+    }
+    /**
+     * Excludes a room when emitting.
+     *
+     * @param room
+     * @return a new BroadcastOperator instance
+     * @public
+     */
+    except(room) {
+        const exceptRooms = new Set(this.exceptRooms);
+        if (Array.isArray(room)) {
+            room.forEach((r) => exceptRooms.add(r));
+        }
+        else {
+            exceptRooms.add(room);
+        }
+        return new BroadcastOperator(this.producer, this.broadcastOptions, this.rooms, exceptRooms, this.flags);
+    }
+    /**
+     * Sets the compress flag.
+     *
+     * @param compress - if `true`, compresses the sending data
+     * @return a new BroadcastOperator instance
+     * @public
+     */
+    compress(compress) {
+        const flags = Object.assign({}, this.flags, { compress });
+        return new BroadcastOperator(this.producer, this.broadcastOptions, this.rooms, this.exceptRooms, flags);
+    }
+    /**
+     * Sets a modifier for a subsequent event emission that the event data may be lost if the client is not ready to
+     * receive messages (because of network slowness or other issues, or because they’re connected through long polling
+     * and is in the middle of a request-response cycle).
+     *
+     * @return a new BroadcastOperator instance
+     * @public
+     */
+    get volatile() {
+        const flags = Object.assign({}, this.flags, { volatile: true });
+        return new BroadcastOperator(this.producer, this.broadcastOptions, this.rooms, this.exceptRooms, flags);
+    }
     /**
      * Emits to all clients.
      *
@@ -172,7 +268,7 @@ class BroadcastOperator {
         const rooms = this.rooms;
         debug('rooms:', rooms);
         const produceMessage = {
-            topic: DEFAULT_KAFKA_TOPIC,
+            topic: KAFKA_ADAPTER_TOPIC,
             messages: [{
                     key: UID,
                     value: msg
@@ -181,6 +277,87 @@ class BroadcastOperator {
         debug('producer send message:', produceMessage);
         this.producer.send(produceMessage);
         return true;
+    }
+    /**
+     * Makes the matching socket instances join the specified rooms
+     *
+     * @param rooms
+     * @public
+     */
+    socketsJoin(rooms) {
+        debug('sockets join');
+        const request = JSON.stringify({
+            type: RequestType.REMOTE_JOIN,
+            opts: {
+                rooms: [...this.rooms],
+                except: [...this.exceptRooms],
+            },
+            rooms: Array.isArray(rooms) ? rooms : [rooms],
+        });
+        const msg = this.broadcastOptions.parser.encode([UID, request]);
+        const produceMessage = {
+            topic: KAFKA_ADAPTER_SOCKET_TOPIC,
+            messages: [{
+                    key: UID,
+                    value: msg
+                }]
+        };
+        debug('producer send message:', produceMessage);
+        this.producer.send(produceMessage);
+    }
+    /**
+     * Makes the matching socket instances leave the specified rooms
+     *
+     * @param rooms
+     * @public
+     */
+    socketsLeave(rooms) {
+        debug('sockets leave');
+        const request = JSON.stringify({
+            type: RequestType.REMOTE_LEAVE,
+            opts: {
+                rooms: [...this.rooms],
+                except: [...this.exceptRooms],
+            },
+            rooms: Array.isArray(rooms) ? rooms : [rooms],
+        });
+        const msg = this.broadcastOptions.parser.encode([UID, request]);
+        const produceMessage = {
+            topic: KAFKA_ADAPTER_SOCKET_TOPIC,
+            messages: [{
+                    key: UID,
+                    value: msg
+                }]
+        };
+        debug('producer send message:', produceMessage);
+        this.producer.send(produceMessage);
+    }
+    /**
+     * Makes the matching socket instances disconnect
+     *
+     * @param close - whether to close the underlying connection
+     * @public
+     */
+    disconnectSockets(close = false) {
+        debug('disconnect sockets');
+        const request = JSON.stringify({
+            type: RequestType.REMOTE_DISCONNECT,
+            opts: {
+                rooms: [...this.rooms],
+                except: [...this.exceptRooms],
+            },
+            close,
+        });
+        const msg = this.broadcastOptions.parser.encode([UID, request]);
+        const produceMessage = {
+            topic: KAFKA_ADAPTER_SOCKET_TOPIC,
+            messages: [{
+                    key: UID,
+                    value: msg
+                }]
+        };
+        debug('producer send message:', produceMessage);
+        this.producer.send(produceMessage);
     }
 }
 exports.BroadcastOperator = BroadcastOperator;
