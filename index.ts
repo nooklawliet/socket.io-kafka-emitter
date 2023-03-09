@@ -1,11 +1,10 @@
 import * as msgpack from 'notepack.io';
 import * as Debug from 'debug';
 import { PacketType } from 'socket.io-parser';
-import { Producer } from 'kafkajs';
+import { Producer, Kafka, Partitioners } from 'kafkajs';
 const debug = new Debug('socket.io-kafka-emitter');
-const UID = "emitter";
-const KAFKA_ADAPTER_TOPIC = 'kafka_adapter';
-const KAFKA_ADAPTER_SOCKET_TOPIC = 'kafka_adapter_socket';
+const UID = 'emitter';
+const DEFAULT_KAFKA_ADAPTER_TOPIC = 'kafka_adapter';
 
 enum RequestType {
     SOCKETS = 0,
@@ -16,13 +15,20 @@ enum RequestType {
     REMOTE_FETCH = 5,
     SERVER_SIDE_EMIT = 6,
 }
+
+export interface EmitterOptions {
+    /**
+     * @default "kafka_adapter"
+     */
+    topic?: string;
+}
 interface Parser {
     encode: (msg: any) => any;
 }
 interface BroadcastOptions {
     nsp: string;
-    // broadcastChannel: string;
-    // requestChannel: string;
+    adapterTopic: string;
+    requestTopic: string;
     parser: Parser;
 }
 interface BroadcastFlags {
@@ -35,22 +41,21 @@ export class KafkaEmitter {
     private nsp: string;
     private producer: Producer;
     private opts: any;
+    private topic: string;
     private broadcastOptions: BroadcastOptions;
 
     constructor(producer: Producer, opts: any, nsp = "/") {
-        this.producer = producer;
         this.nsp = nsp;
-        this.opts = Object.assign({
-            key: "socket.io",
-            parser: msgpack,
-        }, opts);
+        this.producer = producer;
+        this.topic = opts.topic || DEFAULT_KAFKA_ADAPTER_TOPIC;
         this.broadcastOptions = {
             nsp,
-            // broadcastChannel: this.opts.key + "#" + nsp + "#",
-            // requestChannel: this.opts.key + "-request#" + nsp + "#",
-            parser: this.opts.parser,
+            adapterTopic: this.topic,
+            requestTopic: this.topic + '_request',
+            parser: msgpack,
         };
     }
+
     /**
      * Return a new emitter for the given namespace.
      *
@@ -154,9 +159,10 @@ export class KafkaEmitter {
      * @param args - any number of serializable arguments
      */
     serverSideEmit(...args) {
-        const withAck = typeof args[args.length - 1] === "function";
+        debug('server-side emit');
+        const withAck = typeof args[args.length - 1] === 'function';
         if (withAck) {
-            throw new Error("Acknowledgements are not supported");
+            throw new Error('Acknowledgements are not supported');
         }
         const request = JSON.stringify({
             uid: UID,
@@ -164,15 +170,15 @@ export class KafkaEmitter {
             data: args,
         });
         const msg = this.broadcastOptions.parser.encode([UID, request]);
-        const produceMessage = {
-            topic: KAFKA_ADAPTER_SOCKET_TOPIC,
+        const pMessage = {
+            topic: this.broadcastOptions.requestTopic,
             messages: [{
                 key: UID,
                 value: msg
             }]
         }
-        debug('producer send message:', produceMessage);
-        this.producer.send(produceMessage);
+        debug('producer send message:', pMessage);
+        this.producer.send(pMessage);
     }
 }
 
@@ -202,8 +208,7 @@ export class BroadcastOperator {
         const rooms = new Set(this.rooms);
         if (Array.isArray(room)) {
             room.forEach((r) => rooms.add(r));
-        }
-        else {
+        } else {
             rooms.add(room);
         }
         return new BroadcastOperator(this.producer, this.broadcastOptions, rooms, this.exceptRooms, this.flags);
@@ -229,8 +234,7 @@ export class BroadcastOperator {
         const exceptRooms = new Set(this.exceptRooms);
         if (Array.isArray(room)) {
             room.forEach((r) => exceptRooms.add(r));
-        }
-        else {
+        } else {
             exceptRooms.add(room);
         }
         return new BroadcastOperator(this.producer, this.broadcastOptions, this.rooms, exceptRooms, this.flags);
@@ -294,15 +298,15 @@ export class BroadcastOperator {
         const rooms = this.rooms;
         debug('rooms:', rooms);
 
-        const produceMessage = {
-            topic: KAFKA_ADAPTER_TOPIC,
+        const pMessage = {
+            topic: this.broadcastOptions.adapterTopic,
             messages: [{
                 key: UID,
                 value: msg
             }],
         }
-        debug('producer send message:', produceMessage);
-        this.producer.send(produceMessage)
+        debug('producer send message:', pMessage);
+        this.producer.send(pMessage)
         return true;
     }
     /**
@@ -322,15 +326,15 @@ export class BroadcastOperator {
             rooms: Array.isArray(rooms) ? rooms : [rooms],
         });
         const msg = this.broadcastOptions.parser.encode([UID, request]);
-        const produceMessage = {
-            topic: KAFKA_ADAPTER_SOCKET_TOPIC,
+        const pMessage = {
+            topic: this.broadcastOptions.requestTopic,
             messages: [{
                 key: UID,
                 value: msg
             }]
         }
-        debug('producer send message:', produceMessage);
-        this.producer.send(produceMessage);
+        debug('producer send message:', pMessage);
+        this.producer.send(pMessage);
     }
     /**
      * Makes the matching socket instances leave the specified rooms
@@ -349,15 +353,15 @@ export class BroadcastOperator {
             rooms: Array.isArray(rooms) ? rooms : [rooms],
         });
         const msg = this.broadcastOptions.parser.encode([UID, request]);
-        const produceMessage = {
-            topic: KAFKA_ADAPTER_SOCKET_TOPIC,
+        const pMessage = {
+            topic: this.broadcastOptions.requestTopic,
             messages: [{
                 key: UID,
                 value: msg
             }]
         }
-        debug('producer send message:', produceMessage);
-        this.producer.send(produceMessage);
+        debug('producer send message:', pMessage);
+        this.producer.send(pMessage);
     }
     /**
      * Makes the matching socket instances disconnect
@@ -376,14 +380,14 @@ export class BroadcastOperator {
             close,
         });
         const msg = this.broadcastOptions.parser.encode([UID, request]);
-        const produceMessage = {
-            topic: KAFKA_ADAPTER_SOCKET_TOPIC,
+        const pMessage = {
+            topic: this.broadcastOptions.requestTopic,
             messages: [{
                 key: UID,
                 value: msg
             }]
         }
-        debug('producer send message:', produceMessage);
-        this.producer.send(produceMessage);
+        debug('producer send message:', pMessage);
+        this.producer.send(pMessage);
     }
 }

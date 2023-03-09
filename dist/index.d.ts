@@ -1,8 +1,15 @@
 import { Producer } from 'kafkajs';
+export interface EmitterOptions {
+    /**
+     * @default "kafka_adapter"
+     */
+    topic?: string;
+}
 export declare class KafkaEmitter {
     private nsp;
     private producer;
     private opts;
+    private topic;
     private broadcastOptions;
     constructor(producer: Producer, opts: any, nsp?: string);
     /**
