@@ -1,7 +1,15 @@
 import * as msgpack from 'notepack.io';
 import * as Debug from 'debug';
 import { PacketType } from 'socket.io-parser';
-import { Producer, Kafka, Partitioners } from 'kafkajs';
+import { Producer } from 'kafkajs';
+import type {
+    DefaultEventsMap,
+    EventNames,
+    EventParams,
+    EventsMap,
+    TypedEventBroadcaster,
+} from "./typed-events";
+
 const debug = new Debug('socket.io-kafka-emitter');
 const UID = 'emitter';
 const DEFAULT_KAFKA_ADAPTER_TOPIC = 'kafka_adapter';
@@ -36,7 +44,16 @@ interface BroadcastFlags {
     compress?: boolean;
 }
 
-export class KafkaEmitter {
+export const RESERVED_EVENTS: ReadonlySet<string> = new Set(<const>[
+    "connect",
+    "connect_error",
+    "disconnect",
+    "disconnecting",
+    "newListener",
+    "removeListener",
+]);
+
+export class KafkaEmitter<EmitEvents extends EventsMap = DefaultEventsMap> {
 
     private nsp: string;
     private producer: Producer;
@@ -62,7 +79,7 @@ export class KafkaEmitter {
      * @param nsp - namespace
      * @public
      */
-    of(nsp) {
+    public of(nsp: string): KafkaEmitter<EmitEvents> {
         return new KafkaEmitter(this.producer, this.opts, (nsp[0] !== "/" ? "/" : "") + nsp);
     }
     /**
@@ -71,7 +88,7 @@ export class KafkaEmitter {
      * @return Always true
      * @public
      */
-    emit(ev, ...args) {
+    public emit<Ev extends EventNames<EmitEvents>>(ev: Ev, ...args: EventParams<EmitEvents, Ev>): true {
         return new BroadcastOperator(this.producer, this.broadcastOptions).emit(ev, ...args);
     }
     /**
@@ -81,7 +98,7 @@ export class KafkaEmitter {
      * @return BroadcastOperator
      * @public
      */
-    to(room) {
+    public to(room: string | string[]): BroadcastOperator<EmitEvents> {
         return new BroadcastOperator(this.producer, this.broadcastOptions).to(room);
     }
     /**
@@ -91,7 +108,7 @@ export class KafkaEmitter {
      * @return BroadcastOperator
      * @public
      */
-    in(room) {
+    public in(room: string | string[]): BroadcastOperator<EmitEvents> {
         return new BroadcastOperator(this.producer, this.broadcastOptions).in(room);
     }
     /**
@@ -101,7 +118,7 @@ export class KafkaEmitter {
      * @return BroadcastOperator
      * @public
      */
-    except(room) {
+    public except(room: string | string[]): BroadcastOperator<EmitEvents> {
         return new BroadcastOperator(this.producer, this.broadcastOptions).except(room);
     }
     /**
@@ -112,9 +129,8 @@ export class KafkaEmitter {
      * @return BroadcastOperator
      * @public
      */
-    get volatile() {
-        return new BroadcastOperator(this.producer, this.broadcastOptions)
-            .volatile;
+    public get volatile(): BroadcastOperator<EmitEvents> {
+        return new BroadcastOperator(this.producer, this.broadcastOptions).volatile;
     }
     /**
      * Sets the compress flag.
@@ -123,7 +139,7 @@ export class KafkaEmitter {
      * @return BroadcastOperator
      * @public
      */
-    compress(compress) {
+    public compress(compress: boolean): BroadcastOperator<EmitEvents> {
         return new BroadcastOperator(this.producer, this.broadcastOptions).compress(compress);
     }
     /**
@@ -132,7 +148,7 @@ export class KafkaEmitter {
      * @param rooms
      * @public
      */
-    socketsJoin(rooms) {
+    public socketsJoin(rooms: string | string[]): void {
         return new BroadcastOperator(this.producer, this.broadcastOptions).socketsJoin(rooms);
     }
     /**
@@ -141,7 +157,7 @@ export class KafkaEmitter {
      * @param rooms
      * @public
      */
-    socketsLeave(rooms) {
+    public socketsLeave(rooms: string | string[]): void {
         return new BroadcastOperator(this.producer, this.broadcastOptions).socketsLeave(rooms);
     }
     /**
@@ -150,7 +166,7 @@ export class KafkaEmitter {
      * @param close - whether to close the underlying connection
      * @public
      */
-    disconnectSockets(close = false) {
+    public disconnectSockets(close: boolean = false): void {
         return new BroadcastOperator(this.producer, this.broadcastOptions).disconnectSockets(close);
     }
     /**
@@ -158,7 +174,7 @@ export class KafkaEmitter {
      *
      * @param args - any number of serializable arguments
      */
-    serverSideEmit(...args) {
+    public serverSideEmit(...args: any[]): void {
         debug('server-side emit');
         const withAck = typeof args[args.length - 1] === 'function';
         if (withAck) {
@@ -182,7 +198,7 @@ export class KafkaEmitter {
     }
 }
 
-export class BroadcastOperator {
+export class BroadcastOperator<EmitEvents extends EventsMap>implements TypedEventBroadcaster<EmitEvents> {
 
     private readonly producer: any;
     private readonly broadcastOptions: BroadcastOptions;
@@ -204,7 +220,7 @@ export class BroadcastOperator {
      * @return a new BroadcastOperator instance
      * @public
      */
-    to(room) {
+    public to(room: string | string[]): BroadcastOperator<EmitEvents> {
         const rooms = new Set(this.rooms);
         if (Array.isArray(room)) {
             room.forEach((r) => rooms.add(r));
@@ -220,7 +236,7 @@ export class BroadcastOperator {
      * @return a new BroadcastOperator instance
      * @public
      */
-    in(room) {
+    public in(room: string | string[]): BroadcastOperator<EmitEvents> {
         return this.to(room);
     }
     /**
@@ -230,7 +246,7 @@ export class BroadcastOperator {
      * @return a new BroadcastOperator instance
      * @public
      */
-    except(room) {
+    public except(room: string | string[]): BroadcastOperator<EmitEvents> {
         const exceptRooms = new Set(this.exceptRooms);
         if (Array.isArray(room)) {
             room.forEach((r) => exceptRooms.add(r));
@@ -246,7 +262,7 @@ export class BroadcastOperator {
      * @return a new BroadcastOperator instance
      * @public
      */
-    compress(compress) {
+    public compress(compress: boolean): BroadcastOperator<EmitEvents> {
         const flags = Object.assign({}, this.flags, { compress });
         return new BroadcastOperator(this.producer, this.broadcastOptions, this.rooms, this.exceptRooms, flags);
     }
@@ -258,7 +274,7 @@ export class BroadcastOperator {
      * @return a new BroadcastOperator instance
      * @public
      */
-    get volatile() {
+    public get volatile(): BroadcastOperator<EmitEvents> {
         const flags = Object.assign({}, this.flags, { volatile: true });
         return new BroadcastOperator(this.producer, this.broadcastOptions, this.rooms, this.exceptRooms, flags);
     }
@@ -268,11 +284,10 @@ export class BroadcastOperator {
      * @return Always true
      * @public
      */
-    emit(ev, ...args) {
-        // if (exports.RESERVED_EVENTS.has(ev)) {
-        //     throw new Error(`"${ev}" is a reserved event name`);
-        // }
-        // set up packet object
+    public emit<Ev extends EventNames<EmitEvents>>(ev: Ev,...args: EventParams<EmitEvents, Ev>): true {
+        if (exports.RESERVED_EVENTS.has(ev)) {
+            throw new Error(`"${ev}" is a reserved event name`);
+        }
         
         const data = [ev, ...args];
         debug('emit data:', data);
@@ -287,7 +302,6 @@ export class BroadcastOperator {
             except: [...this.exceptRooms],
         };
         const msg = this.broadcastOptions.parser.encode([UID, packet, opts]);
-        // let channel = this.broadcastOptions.broadcastChannel;
         // if (this.rooms && this.rooms.size === 1) {
         //     channel += this.rooms.keys().next().value + "#";
         // }
@@ -315,7 +329,7 @@ export class BroadcastOperator {
      * @param rooms
      * @public
      */
-    socketsJoin(rooms) {
+    public socketsJoin(rooms: string | string[]): void {
         debug('sockets join');
         const request = JSON.stringify({
             type: RequestType.REMOTE_JOIN,
@@ -342,7 +356,7 @@ export class BroadcastOperator {
      * @param rooms
      * @public
      */
-    socketsLeave(rooms) {
+    public socketsLeave(rooms: string | string[]): void {
         debug('sockets leave');
         const request = JSON.stringify({
             type: RequestType.REMOTE_LEAVE,
@@ -369,7 +383,7 @@ export class BroadcastOperator {
      * @param close - whether to close the underlying connection
      * @public
      */
-    disconnectSockets(close = false) {
+    public disconnectSockets(close: boolean = false): void {
         debug('disconnect sockets');
         const request = JSON.stringify({
             type: RequestType.REMOTE_DISCONNECT,

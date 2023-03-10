@@ -1,11 +1,13 @@
 import { Producer } from 'kafkajs';
+import type { DefaultEventsMap, EventNames, EventParams, EventsMap, TypedEventBroadcaster } from "./typed-events";
 export interface EmitterOptions {
     /**
      * @default "kafka_adapter"
      */
     topic?: string;
 }
-export declare class KafkaEmitter {
+export declare const RESERVED_EVENTS: ReadonlySet<string>;
+export declare class KafkaEmitter<EmitEvents extends EventsMap = DefaultEventsMap> {
     private nsp;
     private producer;
     private opts;
@@ -18,14 +20,14 @@ export declare class KafkaEmitter {
      * @param nsp - namespace
      * @public
      */
-    of(nsp: any): KafkaEmitter;
+    of(nsp: string): KafkaEmitter<EmitEvents>;
     /**
      * Emits to all clients.
      *
      * @return Always true
      * @public
      */
-    emit(ev: any, ...args: any[]): boolean;
+    emit<Ev extends EventNames<EmitEvents>>(ev: Ev, ...args: EventParams<EmitEvents, Ev>): true;
     /**
      * Targets a room when emitting.
      *
@@ -33,7 +35,7 @@ export declare class KafkaEmitter {
      * @return BroadcastOperator
      * @public
      */
-    to(room: any): BroadcastOperator;
+    to(room: string | string[]): BroadcastOperator<EmitEvents>;
     /**
      * Targets a room when emitting.
      *
@@ -41,7 +43,7 @@ export declare class KafkaEmitter {
      * @return BroadcastOperator
      * @public
      */
-    in(room: any): BroadcastOperator;
+    in(room: string | string[]): BroadcastOperator<EmitEvents>;
     /**
      * Excludes a room when emitting.
      *
@@ -49,7 +51,7 @@ export declare class KafkaEmitter {
      * @return BroadcastOperator
      * @public
      */
-    except(room: any): BroadcastOperator;
+    except(room: string | string[]): BroadcastOperator<EmitEvents>;
     /**
      * Sets a modifier for a subsequent event emission that the event data may be lost if the client is not ready to
      * receive messages (because of network slowness or other issues, or because they’re connected through long polling
@@ -58,7 +60,7 @@ export declare class KafkaEmitter {
      * @return BroadcastOperator
      * @public
      */
-    get volatile(): BroadcastOperator;
+    get volatile(): BroadcastOperator<EmitEvents>;
     /**
      * Sets the compress flag.
      *
@@ -66,21 +68,21 @@ export declare class KafkaEmitter {
      * @return BroadcastOperator
      * @public
      */
-    compress(compress: any): BroadcastOperator;
+    compress(compress: boolean): BroadcastOperator<EmitEvents>;
     /**
      * Makes the matching socket instances join the specified rooms
      *
      * @param rooms
      * @public
      */
-    socketsJoin(rooms: any): void;
+    socketsJoin(rooms: string | string[]): void;
     /**
      * Makes the matching socket instances leave the specified rooms
      *
      * @param rooms
      * @public
      */
-    socketsLeave(rooms: any): void;
+    socketsLeave(rooms: string | string[]): void;
     /**
      * Makes the matching socket instances disconnect
      *
@@ -95,7 +97,7 @@ export declare class KafkaEmitter {
      */
     serverSideEmit(...args: any[]): void;
 }
-export declare class BroadcastOperator {
+export declare class BroadcastOperator<EmitEvents extends EventsMap> implements TypedEventBroadcaster<EmitEvents> {
     private readonly producer;
     private readonly broadcastOptions;
     private readonly rooms;
@@ -109,7 +111,7 @@ export declare class BroadcastOperator {
      * @return a new BroadcastOperator instance
      * @public
      */
-    to(room: any): BroadcastOperator;
+    to(room: string | string[]): BroadcastOperator<EmitEvents>;
     /**
      * Targets a room when emitting.
      *
@@ -117,7 +119,7 @@ export declare class BroadcastOperator {
      * @return a new BroadcastOperator instance
      * @public
      */
-    in(room: any): BroadcastOperator;
+    in(room: string | string[]): BroadcastOperator<EmitEvents>;
     /**
      * Excludes a room when emitting.
      *
@@ -125,7 +127,7 @@ export declare class BroadcastOperator {
      * @return a new BroadcastOperator instance
      * @public
      */
-    except(room: any): BroadcastOperator;
+    except(room: string | string[]): BroadcastOperator<EmitEvents>;
     /**
      * Sets the compress flag.
      *
@@ -133,7 +135,7 @@ export declare class BroadcastOperator {
      * @return a new BroadcastOperator instance
      * @public
      */
-    compress(compress: any): BroadcastOperator;
+    compress(compress: boolean): BroadcastOperator<EmitEvents>;
     /**
      * Sets a modifier for a subsequent event emission that the event data may be lost if the client is not ready to
      * receive messages (because of network slowness or other issues, or because they’re connected through long polling
@@ -142,28 +144,28 @@ export declare class BroadcastOperator {
      * @return a new BroadcastOperator instance
      * @public
      */
-    get volatile(): BroadcastOperator;
+    get volatile(): BroadcastOperator<EmitEvents>;
     /**
      * Emits to all clients.
      *
      * @return Always true
      * @public
      */
-    emit(ev: any, ...args: any[]): boolean;
+    emit<Ev extends EventNames<EmitEvents>>(ev: Ev, ...args: EventParams<EmitEvents, Ev>): true;
     /**
      * Makes the matching socket instances join the specified rooms
      *
      * @param rooms
      * @public
      */
-    socketsJoin(rooms: any): void;
+    socketsJoin(rooms: string | string[]): void;
     /**
      * Makes the matching socket instances leave the specified rooms
      *
      * @param rooms
      * @public
      */
-    socketsLeave(rooms: any): void;
+    socketsLeave(rooms: string | string[]): void;
     /**
      * Makes the matching socket instances disconnect
      *

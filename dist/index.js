@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BroadcastOperator = exports.KafkaEmitter = void 0;
+exports.BroadcastOperator = exports.KafkaEmitter = exports.RESERVED_EVENTS = void 0;
 const msgpack = require("notepack.io");
 const Debug = require("debug");
 const socket_io_parser_1 = require("socket.io-parser");
@@ -17,6 +17,14 @@ var RequestType;
     RequestType[RequestType["REMOTE_FETCH"] = 5] = "REMOTE_FETCH";
     RequestType[RequestType["SERVER_SIDE_EMIT"] = 6] = "SERVER_SIDE_EMIT";
 })(RequestType || (RequestType = {}));
+exports.RESERVED_EVENTS = new Set([
+    "connect",
+    "connect_error",
+    "disconnect",
+    "disconnecting",
+    "newListener",
+    "removeListener",
+]);
 class KafkaEmitter {
     constructor(producer, opts, nsp = "/") {
         this.nsp = nsp;
@@ -86,8 +94,7 @@ class KafkaEmitter {
      * @public
      */
     get volatile() {
-        return new BroadcastOperator(this.producer, this.broadcastOptions)
-            .volatile;
+        return new BroadcastOperator(this.producer, this.broadcastOptions).volatile;
     }
     /**
      * Sets the compress flag.
@@ -238,10 +245,9 @@ class BroadcastOperator {
      * @public
      */
     emit(ev, ...args) {
-        // if (exports.RESERVED_EVENTS.has(ev)) {
-        //     throw new Error(`"${ev}" is a reserved event name`);
-        // }
-        // set up packet object
+        if (exports.RESERVED_EVENTS.has(ev)) {
+            throw new Error(`"${ev}" is a reserved event name`);
+        }
         const data = [ev, ...args];
         debug('emit data:', data);
         const packet = {
@@ -255,7 +261,6 @@ class BroadcastOperator {
             except: [...this.exceptRooms],
         };
         const msg = this.broadcastOptions.parser.encode([UID, packet, opts]);
-        // let channel = this.broadcastOptions.broadcastChannel;
         // if (this.rooms && this.rooms.size === 1) {
         //     channel += this.rooms.keys().next().value + "#";
         // }

@@ -23,13 +23,13 @@ async function main() {
     // emitter.emit('message', new Date().toUTCString());
     // emitter.to('client-1').emit('message', new Date().toUTCString());
 
-    emitter.socketsJoin("room1");
-    // setTimeout(() => {
-    //     emitter.serverSideEmit("fetchSockets", "test");
-    //     // emitter.serverSideEmit("allRooms", "test");
-    //     // emitter.in("room1").disconnectSockets(true);
-    //     // emitter.to('room1').emit('message', new Date().toUTCString());
-    // }, 3000);
+    // emitter.socketsJoin("room1");
+    setTimeout(() => {
+        emitter.serverSideEmit("fetchSockets", "test");
+        // emitter.serverSideEmit("allRooms", "test");
+        // emitter.in("room1").disconnectSockets(true);
+        // emitter.to('room1').emit('message', new Date().toUTCString());
+    }, 3000);
 
     // setTimeout(() => {
         // emitter.socketsLeave("room1");
