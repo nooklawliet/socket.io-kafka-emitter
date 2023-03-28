@@ -185,6 +185,7 @@ export class KafkaEmitter<EmitEvents extends EventsMap = DefaultEventsMap> {
             type: RequestType.SERVER_SIDE_EMIT,
             data: args,
         });
+        debug('request:', request);
         const msg = this.broadcastOptions.parser.encode([UID, request]);
         const pMessage = {
             topic: this.broadcastOptions.requestTopic,
@@ -339,6 +340,7 @@ export class BroadcastOperator<EmitEvents extends EventsMap>implements TypedEven
             },
             rooms: Array.isArray(rooms) ? rooms : [rooms],
         });
+        debug('request:', request);
         const msg = this.broadcastOptions.parser.encode([UID, request]);
         const pMessage = {
             topic: this.broadcastOptions.requestTopic,
@@ -366,6 +368,7 @@ export class BroadcastOperator<EmitEvents extends EventsMap>implements TypedEven
             },
             rooms: Array.isArray(rooms) ? rooms : [rooms],
         });
+        debug('request:', request);
         const msg = this.broadcastOptions.parser.encode([UID, request]);
         const pMessage = {
             topic: this.broadcastOptions.requestTopic,
@@ -393,6 +396,7 @@ export class BroadcastOperator<EmitEvents extends EventsMap>implements TypedEven
             },
             close,
         });
+        debug('request:', request);
         const msg = this.broadcastOptions.parser.encode([UID, request]);
         const pMessage = {
             topic: this.broadcastOptions.requestTopic,

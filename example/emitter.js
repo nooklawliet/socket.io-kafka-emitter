@@ -24,12 +24,16 @@ async function main() {
     // emitter.to('client-1').emit('message', new Date().toUTCString());
 
     // emitter.socketsJoin("room1");
-    setTimeout(() => {
-        emitter.serverSideEmit("fetchSockets", "test");
+    setTimeout(async () => {
+        // emitter.serverSideEmit("broadcast", "test");
+        emitter.serverSideEmit("broadcastWithAck", "test");
         // emitter.serverSideEmit("allRooms", "test");
         // emitter.in("room1").disconnectSockets(true);
         // emitter.to('room1').emit('message', new Date().toUTCString());
-    }, 3000);
+        // await producer.disconnect();
+
+        // process.exit();
+    }, 1000);
 
     // setTimeout(() => {
         // emitter.socketsLeave("room1");

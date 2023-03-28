@@ -149,6 +149,7 @@ class KafkaEmitter {
             type: RequestType.SERVER_SIDE_EMIT,
             data: args,
         });
+        debug('request:', request);
         const msg = this.broadcastOptions.parser.encode([UID, request]);
         const pMessage = {
             topic: this.broadcastOptions.requestTopic,
@@ -296,6 +297,7 @@ class BroadcastOperator {
             },
             rooms: Array.isArray(rooms) ? rooms : [rooms],
         });
+        debug('request:', request);
         const msg = this.broadcastOptions.parser.encode([UID, request]);
         const pMessage = {
             topic: this.broadcastOptions.requestTopic,
@@ -323,6 +325,7 @@ class BroadcastOperator {
             },
             rooms: Array.isArray(rooms) ? rooms : [rooms],
         });
+        debug('request:', request);
         const msg = this.broadcastOptions.parser.encode([UID, request]);
         const pMessage = {
             topic: this.broadcastOptions.requestTopic,
@@ -350,6 +353,7 @@ class BroadcastOperator {
             },
             close,
         });
+        debug('request:', request);
         const msg = this.broadcastOptions.parser.encode([UID, request]);
         const pMessage = {
             topic: this.broadcastOptions.requestTopic,
